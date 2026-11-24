@@ -77,11 +77,11 @@ BEGIN
     -- TG_ARGV[0] = 'always' : never delete/update
     --            = 'final'  : only rows in a final state are protected
     IF TG_ARGV[0] = 'always'
-       OR (TG_TABLE_NAME = 'maintenance'   AND OLD.status = 'completed')
+       OR (TG_TABLE_NAME = 'maintenance'   AND OLD.status::text = 'completed')
        OR (TG_TABLE_NAME = 'authorization' AND TG_OP = 'DELETE')
-       OR (TG_TABLE_NAME = 'charge'        AND OLD.status = 'invoiced')
+       OR (TG_TABLE_NAME = 'charge'        AND OLD.status::text = 'invoiced')
        OR (TG_TABLE_NAME = 'reservation'   AND TG_OP = 'DELETE'
-                                           AND OLD.status IN ('completed', 'no_show')) THEN
+                                           AND OLD.status::text IN ('completed', 'no_show')) THEN
         PERFORM public.rule_violation('LB005',
             format('%s on %s.%s would destroy history', TG_OP, TG_TABLE_SCHEMA, TG_TABLE_NAME));
     END IF;
