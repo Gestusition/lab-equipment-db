@@ -40,6 +40,14 @@ DROP DOMAIN IF EXISTS public.money_amount CASCADE;
 CREATE DOMAIN public.money_amount AS numeric(12,2)
     CHECK (VALUE >= 0);
 
+-- "Current time" used by every time-dependent rule. Normally now(), but
+-- tests and demos can pin it with:  SET lab.now = '2026-12-01 09:00+03';
+-- which makes results reproducible regardless of the real date.
+CREATE OR REPLACE FUNCTION public.app_now() RETURNS timestamptz
+LANGUAGE sql STABLE AS $$
+    SELECT coalesce(nullif(current_setting('lab.now', true), '')::timestamptz, now());
+$$;
+
 -- Shared helper: raise a business-rule violation with a stable SQLSTATE
 -- so tests can tell rule violations apart from ordinary errors.
 -- P0001 is the generic PL/pgSQL "raise_exception" code; we use custom
