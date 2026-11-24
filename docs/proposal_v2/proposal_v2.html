@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Proposal v2 — University Research Laboratory &amp; Equipment Management System</title>
+<style>
+  @page { size: A4; margin: 24mm 22mm 26mm 22mm;
+          @bottom-center { content: counter(page); } }
+  body { font-family: "Latin Modern Roman", "CMU Serif", "Times New Roman", serif; font-size: 11.3pt;
+         line-height: 1.42; color: #111; }
+  h1 { font-size: 21pt; font-weight: normal; text-align: center; margin: 40mm 0 10mm; line-height: 1.25; }
+  .who { text-align: center; font-size: 13pt; line-height: 1.5; }
+  .date { text-align: center; font-size: 13pt; margin: 9mm 0 14mm; }
+  .abstract { margin: 0 12mm; }
+  .abstract h3 { text-align: center; font-size: 11pt; margin-bottom: 3mm; }
+  .abstract p { text-indent: 1.5em; text-align: justify; margin: 0; }
+  h2 { font-size: 15pt; margin: 9mm 0 4mm; }
+  h2 .n { margin-right: 4mm; }
+  p { text-align: justify; margin: 0 0 3.2mm; }
+  ol li { margin-bottom: 2.4mm; text-align: justify; }
+  table { border-collapse: collapse; width: 100%; font-size: 9.8pt; margin: 3mm 0 4mm; }
+  th, td { border-top: 0.6pt solid #444; border-bottom: 0.6pt solid #444; padding: 1.6mm 2mm; text-align: left; vertical-align: top; }
+  th { border-top: 1.2pt solid #000; }
+  tr:last-child td { border-bottom: 1.2pt solid #000; }
+  .math { text-align: center; font-style: italic; margin: 3mm 0; }
+  .pb { page-break-before: always; }
+  .refs p { padding-left: 2em; text-indent: -2em; font-size: 10.3pt; }
+  .footer { position: fixed; bottom: -16mm; left: 0; right: 0; text-align: center; font-size: 9pt; color: #222; }
+  i.t { font-style: italic; }
+</style>
+</head>
+<body>
+<div class="footer">Arel Üniversitesi, Müh. Mim. Fak. Bilgisayar Mühendisliği. Türkoba Mahallesi, Erguvan Sokak, No:26, K 34537, Tepekent – Büyükçekmece, İstanbul</div>
+
+<h1>University Research Laboratory &amp; Equipment<br>Management System<br><span style="font-size:14pt">Revised proposal (v2)</span></h1>
+<div class="who">Kıraç Polatkan<br>230303054<br>Bilgisayar Müh/Comp Eng</div>
+<div class="date">November 24, 2026</div>
+
+<div class="abstract">
+<h3>Abstract</h3>
+<p>This revision keeps the subject of the October proposal, a PostgreSQL database for university
+laboratories and shared scientific equipment, and answers the feedback that its scope was too narrow.
+No new topic is introduced. The same domain is modelled in more depth and split into six modules:
+organisation and people, inventory, training and authorization, booking, service, and finance, with an
+audit and security layer underneath. The EER model grows from 11 to 31 entity types. It now uses
+overlapping as well as disjoint specializations, a category (union type), a weak entity, a ternary
+relationship, recursive and one-to-one relationships, and composite, multivalued and derived attributes.
+Two items that v1 listed as future work, transfer history and usage charging, are now in scope. The
+implementation is entirely in SQL and has been built and tested on PostgreSQL 18. A reproducible
+test suite of 111 positive, negative and concurrent cases passes. The extended EER diagram is
+submitted as a separate PDF; this document contains no program code.</p>
+</div>
+
+<h2 class="pb"><span class="n">1</span>Introduction</h2>
+<p>Shared laboratory equipment is expensive and is used by researchers from several projects. When
+inventory, training, bookings and service history are kept in separate spreadsheets, the records become
+inconsistent and bookings conflict. A relational database can centralise these records and make the
+operational rules explicit [1, 2]. The October proposal covered this core with eleven entity types. The
+feedback was that this scope was limited, so this revision deepens the same domain rather than replacing it.</p>
+<p>The design is organised as six modules. Each module is a PostgreSQL schema and a script of its own, loaded
+in dependency order, so it can be explained, tested and graded separately:</p>
+<table>
+<tr><th style="width:17%">Module</th><th>Content (new in v2 in italics)</th><th style="width:30%">Main EER constructs</th></tr>
+<tr><td>Org</td><td>Department, laboratory, person, research project, membership; <i>academic, graduate student and
+technician subclasses, advising, laboratory manager, phone numbers</i></td><td>overlapping partial specialization,
+recursive and 1:1 relationships, composite / multivalued / derived attributes</td></tr>
+<tr><td>Inventory</td><td>Category, equipment, the v1 training-required / unrestricted split; <i>category tree,
+instrument–module hierarchy, hazardous and calibratable subclasses, components, transfers, consumables and
+stock ledger</i></td><td>two specializations of one superclass, weak entity, recursive relationships</td></tr>
+<tr><td>Training</td><td>Authorization; <i>courses, sessions, attendance with scores, authorization derived from a
+passed session, hazard-specific safety courses</i></td><td>ternary relationship (trainee, assessor, instrument)
+attached to a subclass</td></tr>
+<tr><td>Booking</td><td>Reservation, usage log; <i>approval workflow, waitlist, automatic revalidation</i></td>
+<td>reified ternary relationship, 1:1 relationship</td></tr>
+<tr><td>Service</td><td>Maintenance, calibration; <i>preventive / corrective maintenance, incidents raised during use</i></td>
+<td>disjoint total attribute-defined specialization, 1:1 relationship</td></tr>
+<tr><td>Finance</td><td><i>Equipment ownership, funding agencies and grants, rate cards, usage charges</i></td>
+<td>category (union type), derived attributes</td></tr>
+</table>
+<p>The v1 rules are unchanged. Booking times must be valid, and blocking reservations of one item must
+not overlap. The booker must be a project member for the whole booking. Training-required equipment
+also needs a valid equipment-specific authorization. Every active project has exactly one current principal
+investigator. Each reservation has at most one usage log, and availability is derived. The new modules add
+rules of the same kind. Hazardous items need a passed safety course for their own hazard class and the lab
+manager's approval. Equipment may only be housed in a laboratory with an adequate biosafety level. A
+critical incident takes an item out of service immediately. A charge must fit the remaining budget of a grant
+of the same project. Historical records cannot be deleted or rewritten. A graphical interface, IoT integration
+and procurement remain out of scope.</p>
+
+<h2><span class="n">2</span>Procedure</h2>
+<ol>
+<li>Refine the EER model: keys, cardinality ratios, participation, specialization and category constraints. Map
+each construct to relations, choosing the mapping per specialization: single relation with a discriminator
+(option 8C) for the v1 equipment split, and one relation per subclass (8A) for the overlapping and attribute-defined
+specializations. The category uses a surrogate key [1]. Document functional dependencies and verify BCNF
+for every relation, rather than assuming it from the presence of keys [2].</li>
+<li>Implement each module in SQL. Single-row rules use keys, <i class="t">CHECK</i> and domains. Interval rules
+(bookings, authorizations, rate periods) use exclusion constraints over range types [4]. Cross-table rules use
+triggers and stored procedures. Rules that may be violated temporarily inside a transaction use deferred
+constraint triggers: principal-investigator replacement, specialization totality and category attachment.
+A change in one module re-validates future bookings: a membership that ends, a revoked authorization,
+a newly introduced training requirement, or retired equipment.</li>
+<li>Add the security layer: four group roles with least-privilege grants, <i class="t">SECURITY DEFINER</i> booking
+functions as the only write path for researchers, row-level security on reservations, and an append-only
+audit log partitioned by month.</li>
+<li>Build reporting views: availability, calibration status, expiring authorizations, utilisation ranking
+(window functions), reliability (mean time between failures and to repair), service cost subtotals (ROLLUP),
+grant budget, category and advising trees (recursive queries), and a materialized monthly utilisation view.
+Select indexes from access patterns and confirm them with measured query plans.</li>
+<li>Load a reproducible dataset in which the "current time" is fixed, so that time-dependent rules give the
+same result on every run. Execute the test suite. Every test runs in a rolled-back subtransaction and records
+expected versus observed outcomes. Concurrency tests open two real sessions to check that conflicting
+bookings and the last seat of a training session are serialised correctly.</li>
+</ol>
+
+<h2 class="pb"><span class="n">3</span>Theory</h2>
+<p><b>Specializations.</b> Let <i>E</i> be EQUIPMENT. The v1 specialization is unchanged: with <i>T</i> and <i>U</i>
+the training-required and unrestricted subclasses,</p>
+<p class="math">T ⊆ E, &nbsp; U ⊆ E, &nbsp; E = T ∪ U, &nbsp; T ∩ U = ∅,</p>
+<p>selected by the mandatory Boolean discriminator <i class="t">training_required</i>. A second, independent
+specialization of the same superclass is added. With <i>H</i> hazardous and <i>C</i> calibratable equipment,
+<i>H</i> ⊆ <i>E</i> and <i>C</i> ⊆ <i>E</i> hold, but neither <i>H</i> ∩ <i>C</i> = ∅ nor <i>H</i> ∪ <i>C</i> = <i>E</i>
+is required: the specialization is overlapping and partial. A gamma counter is in both subclasses, while a
+benchtop centrifuge is in neither. PERSON is specialized in the same overlapping, partial way into ACADEMIC,
+GRAD_STUDENT and TECHNICIAN; a lecturer who is also a PhD student belongs to two subclasses. MAINTENANCE
+is specialized disjointly and totally into PREVENTIVE and CORRECTIVE by the attribute
+<i class="t">maintenance_type</i>.</p>
+<p><b>Category.</b> An equipment owner is a department, a laboratory or a funding grant. Its members come from
+three different superclasses, so this is a category (union type), not a specialization:
+OWNER ⊆ DEPARTMENT ∪ LABORATORY ∪ GRANT. The category is partial, because not every department owns
+equipment. It is mapped with a surrogate key whose kind travels inside each superclass's foreign key, so one
+owner can never be claimed by two superclasses [1].</p>
+<p><b>Ternary relationship.</b> AUTHORIZATION relates a trainee, an assessor (both PERSON) and a
+TRAINING_REQUIRED_EQUIPMENT. "Who certified whom on which instrument" cannot be reconstructed from the three
+binary projections, so the relationship is kept ternary. It participates with the subclass <i>T</i>, not with
+<i>E</i>, which makes an authorization on unrestricted equipment impossible by construction.</p>
+<p><b>Weak entity.</b> An equipment component is identified by its instrument and a component number. The
+component number alone is only a partial key: component 1 of the LC-MS and component 1 of the confocal
+microscope are different rows.</p>
+<p><b>Temporal integrity.</b> Reservations, authorizations and rates are valid over intervals. For two
+blocking reservations <i>r</i>, <i>s</i> of the same item the database guarantees
+<i>period</i>(<i>r</i>) ∩ <i>period</i>(<i>s</i>) = ∅, using half-open intervals so that back-to-back bookings
+are allowed. Because the check is an index-backed constraint and not an application-side query, it also
+holds under concurrent transactions [4].</p>
+<p><b>Normalization.</b> Every relation has been checked for partial and transitive dependencies. All
+non-trivial dependencies have a candidate key on the left, so the schema is in BCNF. Stored derived values are
+either generated columns, which the DBMS keeps consistent, or deliberate historical snapshots, such as the
+hourly rate at the time of use.</p>
+
+<h2><span class="n">4</span>Results</h2>
+<p>Unlike in v1, results are now measured rather than expected. The implementation consists of 37 tables
+(plus 13 monthly audit partitions), 63 triggers, 56 functions and procedures and 17 reporting views. It
+builds from an empty database with a single script. The test suite contains 111 cases: 15 organisation,
+17 inventory, 10 training, 33 booking, 13 service, 10 finance, 5 audit, 6 security and 2 concurrency tests.
+All of them pass. Negative tests cover the v1 list (duplicate identities, absent parents, invalid dates,
+overlapping bookings, expired authorization, invalid membership, a second usage log, activation without a
+principal investigator) and the new rules: subclass and category integrity, cycles, biosafety levels,
+calibration, budgets, history protection, privileges and row-level security. In both concurrency tests the
+second session demonstrably waited for the first one's lock and was then rejected.</p>
+<p>Query plans recorded on 200,000 generated reservations show that the composite expression index answers a
+researcher's "latest bookings" query in about 0.03 ms. Without it the same query takes about 140 ms through a
+parallel sequential scan. The partial approval-queue index occupies 16 kB, against about 11 MB for a full B-tree
+on the same table. The plans also show that the exclusion constraint's GiST index can be reused for availability
+queries only when the query repeats the constraint's status predicate. This finding is reflected in the reporting
+views.</p>
+
+<h2><span class="n">5</span>Remarks and Recommendations</h2>
+<p>This is an individual project. All software remains in SQL inside the database. The scripts, the generator of
+the EER drawings, and the test and measurement scripts are kept in a version-controlled repository with one
+commit per module. The application-level identity used by row-level security and the booking functions is a
+session setting. A production system would bind it to authenticated database logins. Possible further work
+within the same domain includes several membership intervals per person and project, booking rules per
+laboratory (opening hours, maximum duration), and notification queues for expiring authorizations and
+calibrations.</p>
+
+<div class="refs">
+<h2>References</h2>
+<p>[1] R. Elmasri and S. B. Navathe, <i>Fundamentals of Database Systems</i>, 7th ed. Pearson, 2016.</p>
+<p>[2] A. Silberschatz, H. F. Korth, and S. Sudarshan, <i>Database System Concepts</i>, 7th ed. McGraw-Hill, 2020.</p>
+<p>[3] P. Muchiri, L. Pintelon, L. Gelders, and H. Martin, “Development of maintenance function performance
+measurement framework and indicators,” <i>International Journal of Production Economics</i>, vol. 131, no. 1,
+pp. 295–302, 2011, doi:10.1016/j.ijpe.2010.04.039.</p>
+<p>[4] PostgreSQL Global Development Group, “PostgreSQL 18 Documentation: Constraints,” sec. 5.5, and “Range
+Types,” sec. 8.17. [Online]. Available: https://www.postgresql.org/docs/18/. [Accessed: 24-Nov-2026].</p>
+</div>
+</body>
+</html>
