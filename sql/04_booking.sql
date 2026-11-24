@@ -149,6 +149,8 @@ DECLARE
     v_needs_approval boolean;
     v_id integer;
 BEGIN
+    PERFORM org.assert_acting_as(p_person,
+        (SELECT lab_id FROM inventory.equipment WHERE equipment_id = p_equipment));
     IF p_from < public.app_now() THEN
         PERFORM public.rule_violation('LB004', 'cannot book a period that has already started');
     END IF;
@@ -178,6 +180,7 @@ BEGIN
     JOIN org.laboratory l ON l.lab_id = e.lab_id
     WHERE r.reservation_id = p_reservation;
 
+    PERFORM org.assert_acting_as(p_approver);
     IF v_manager IS DISTINCT FROM p_approver THEN
         PERFORM public.rule_violation('LB004',
             format('person %s is not the manager of the laboratory for reservation %s', p_approver, p_reservation));
@@ -191,6 +194,9 @@ END $$;
 CREATE PROCEDURE booking.cancel_reservation(p_reservation integer, p_reason text)
 LANGUAGE plpgsql AS $$
 BEGIN
+    PERFORM org.assert_acting_as(r.person_id, e.lab_id)
+    FROM booking.reservation r JOIN inventory.equipment e USING (equipment_id)
+    WHERE r.reservation_id = p_reservation;
     UPDATE booking.reservation
     SET status = 'cancelled', status_note = p_reason
     WHERE reservation_id = p_reservation;

@@ -187,6 +187,23 @@ CREATE CONSTRAINT TRIGGER member_change_keeps_pi
     DEFERRABLE INITIALLY DEFERRED
     FOR EACH ROW EXECUTE FUNCTION org.trg_project_pi_check();
 
+-- Application-level identity. A session states who is acting with
+--   SET lab.person_id = '<person_id>';
+-- When it does, that person may act only for themselves, unless they
+-- manage the laboratory concerned (p_lab). Sessions that do not set it
+-- (administrative scripts, seed data) are not restricted.
+CREATE FUNCTION org.assert_acting_as(p_person integer, p_lab integer DEFAULT NULL)
+RETURNS void LANGUAGE plpgsql AS $$
+DECLARE
+    v_me integer := nullif(current_setting('lab.person_id', true), '')::integer;
+BEGIN
+    IF v_me IS NOT NULL AND v_me <> p_person
+       AND NOT EXISTS (SELECT 1 FROM org.laboratory WHERE lab_id = p_lab AND manager_id = v_me) THEN
+        PERFORM public.rule_violation('LB004',
+            format('person %s cannot act on behalf of person %s', v_me, p_person));
+    END IF;
+END $$;
+
 -- Membership check used by the booking module: was the person a member of
 -- the project for the whole interval [p_from, p_to]?
 CREATE FUNCTION org.is_member_during(p_person integer, p_project integer,
