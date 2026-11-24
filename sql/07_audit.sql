@@ -73,15 +73,22 @@ END $$;
 -- History protection ------------------------------------------------------------------------
 CREATE FUNCTION audit.trg_protect_history() RETURNS trigger
 LANGUAGE plpgsql AS $$
+DECLARE
+    v_protected boolean;
 BEGIN
     -- TG_ARGV[0] = 'always' : never delete/update
     --            = 'final'  : only rows in a final state are protected
-    IF TG_ARGV[0] = 'always'
-       OR (TG_TABLE_NAME = 'maintenance'   AND OLD.status::text = 'completed')
-       OR (TG_TABLE_NAME = 'authorization' AND TG_OP = 'DELETE')
-       OR (TG_TABLE_NAME = 'charge'        AND OLD.status::text = 'invoiced')
-       OR (TG_TABLE_NAME = 'reservation'   AND TG_OP = 'DELETE'
-                                           AND OLD.status::text IN ('completed', 'no_show')) THEN
+    -- (written as nested CASE because PL/pgSQL does not short-circuit OR,
+    --  and tables without a status column would fail on OLD.status)
+    v_protected := CASE
+        WHEN TG_ARGV[0] = 'always'         THEN true
+        WHEN TG_TABLE_NAME = 'authorization' THEN TG_OP = 'DELETE'
+        WHEN TG_TABLE_NAME = 'maintenance' THEN to_jsonb(OLD) ->> 'status' = 'completed'
+        WHEN TG_TABLE_NAME = 'charge'      THEN to_jsonb(OLD) ->> 'status' = 'invoiced'
+        WHEN TG_TABLE_NAME = 'reservation' THEN TG_OP = 'DELETE'
+                                           AND to_jsonb(OLD) ->> 'status' IN ('completed', 'no_show')
+        ELSE false END;
+    IF v_protected THEN
         PERFORM public.rule_violation('LB005',
             format('%s on %s.%s would destroy history', TG_OP, TG_TABLE_SCHEMA, TG_TABLE_NAME));
     END IF;

@@ -86,12 +86,16 @@ BEGIN
             format('person %s has no valid authorization for equipment %s', p_person, p_equipment));
     END IF;
 
+    -- hazardous items: a passed safety course for *that* hazard class,
+    -- valid for the whole booking
     IF EXISTS (SELECT 1 FROM inventory.hazardous_equipment WHERE equipment_id = p_equipment)
        AND NOT EXISTS (
-            SELECT 1 FROM training.session_attendance a
-            JOIN training.training_session s USING (session_id)
-            JOIN training.training_course c USING (course_id)
-            WHERE a.trainee_id = p_person AND a.outcome = 'passed' AND c.is_safety_course
+            SELECT 1 FROM inventory.hazardous_equipment h
+            JOIN training.training_course c ON c.safety_for = h.hazard_class
+            JOIN training.training_session s ON s.course_id = c.course_id
+            JOIN training.session_attendance a ON a.session_id = s.session_id
+            WHERE h.equipment_id = p_equipment
+              AND a.trainee_id = p_person AND a.outcome = 'passed'
               AND s.starts_at <= lower(p_period)
               AND s.starts_at + c.validity >= upper(p_period)) THEN
         PERFORM public.rule_violation('LB002',

@@ -225,15 +225,15 @@ COMMIT;
 
 -- TRAINING (history) -------------------------------------------------------------------
 BEGIN;
-INSERT INTO training.training_course (course_id, code, title, validity, passing_score, is_safety_course)
+INSERT INTO training.training_course (course_id, code, title, validity, passing_score, safety_for)
 OVERRIDING SYSTEM VALUE VALUES
-  (1, 'TRN-LCMS',    'LC-MS/MS Operation',            '12 months', 70, false),
-  (2, 'TRN-CONF',    'Confocal Microscopy Operation', '12 months', 70, false),
-  (3, 'TRN-BSL2',    'Biosafety Level 2 Practice',    '12 months', 75, true),
-  (4, 'TRN-HV',      'High-Voltage Safety',           '6 months',  80, true),
-  (5, 'TRN-UCF',     'Ultracentrifuge Operation',     '24 months', 70, false),
-  (6, 'TRN-LASER',   'Laser Safety',                  '12 months', 70, true),
-  (7, 'TRN-RAD',     'Radiation Protection',          '12 months', 80, true);
+  (1, 'TRN-LCMS',    'LC-MS/MS Operation',            '12 months', 70, NULL),
+  (2, 'TRN-CONF',    'Confocal Microscopy Operation', '12 months', 70, NULL),
+  (3, 'TRN-BSL2',    'Biosafety Level 2 Practice',    '12 months', 75, 'biological'),
+  (4, 'TRN-HV',      'High-Voltage Safety',           '6 months',  80, 'high_voltage'),
+  (5, 'TRN-UCF',     'Ultracentrifuge Operation',     '24 months', 70, NULL),
+  (6, 'TRN-LASER',   'Laser Safety',                  '12 months', 70, 'laser'),
+  (7, 'TRN-RAD',     'Radiation Protection',          '12 months', 80, 'radiation');
 
 INSERT INTO training.course_qualification (course_id, equipment_id) VALUES
   (1, 1), (1, 14), (2, 3), (2, 4), (3, 6), (4, 10), (5, 5), (7, 11);

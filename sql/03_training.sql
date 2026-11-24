@@ -27,7 +27,8 @@ CREATE TABLE training.training_course (
     validity         interval NOT NULL DEFAULT interval '12 months'
                      CHECK (validity >= interval '1 month'),
     passing_score    numeric(5,2) NOT NULL DEFAULT 70 CHECK (passing_score BETWEEN 0 AND 100),
-    is_safety_course boolean NOT NULL DEFAULT false
+    -- a safety course certifies for one hazard class; NULL = operation course
+    safety_for       inventory.hazard_class
 );
 
 CREATE TABLE training.course_qualification (
