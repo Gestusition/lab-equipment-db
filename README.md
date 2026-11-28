@@ -29,6 +29,29 @@ concurrency tests with recorded expected vs. observed outcomes).
 
 ## Running
 
+One command does everything, from the project folder, on any operating system:
+
+| System | Command |
+|---|---|
+| Windows (PowerShell) | `.\run` |
+| Windows (cmd) | `run` |
+| macOS / Linux (and Git Bash) | `./run` |
+
+All three launchers call `tools/run.py`, which detects the operating system and finds PostgreSQL
+itself (Windows: `Program Files\PostgreSQL\*`; macOS: Homebrew `postgresql@*`, Postgres.app, EDB;
+Linux: `/usr/lib/postgresql/*`, `/usr/pgsql-*`, or `PATH`). Requirements: PostgreSQL 18 (server
+and contrib) and Python 3.8+. On Linux run it as a normal user, not root.
+
+It starts a private PostgreSQL cluster in `.pgdata/` (port 5433, created on first run), recreates
+`labdb`, runs every module, the seed, the tests and the EXPLAIN evidence while showing each step,
+prints the object inventory, row counts and every report view, and regenerates all diagrams into
+`output/diagrams.html` (EER pages + relational diagrams read from the live catalog + test results);
+no PDF is regenerated. Options (either spelling): `--skip-explain` / `-SkipExplain`, `--quiet`,
+`--no-open`, `--external` (use an existing server via `PGHOST`/`PGPORT`/`PGUSER`), `--port N`,
+`--database NAME`, `--stop` (stop the private cluster), `--help`.
+
+Manually:
+
 ```powershell
 createdb labdb
 psql -d labdb -v ON_ERROR_STOP=1 -f run_all.sql
