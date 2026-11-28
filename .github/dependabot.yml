@@ -1,0 +1,22 @@
+# Keeps the GitHub Actions used by .github/workflows up to date.
+# The project itself has no package dependencies (plain SQL + Python standard library),
+# so GitHub Actions is the only ecosystem to watch.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "08:00"
+      timezone: Europe/Istanbul
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: ci
+    labels:
+      - dependencies
+      - github-actions
+    groups:
+      actions:
+        patterns:
+          - "*"

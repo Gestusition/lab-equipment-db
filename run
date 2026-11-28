@@ -1,0 +1,15 @@
+#!/bin/sh
+# macOS / Linux launcher:  ./run   (options: ./run --help)
+# The work is done by tools/run.py, which detects the operating system itself.
+cd "$(dirname "$0")" || exit 1
+for py in python3 python; do
+  if command -v "$py" >/dev/null 2>&1 && "$py" -c 'import sys; sys.exit(sys.version_info < (3, 8))' 2>/dev/null; then
+    exec "$py" tools/run.py "$@"
+  fi
+done
+echo "Python 3.8+ not found."
+case "$(uname -s)" in
+  Darwin) echo "  install it with:  brew install python   (or xcode-select --install)" ;;
+  Linux)  echo "  install it with:  sudo apt install python3   (or your distribution's package)" ;;
+esac
+exit 1

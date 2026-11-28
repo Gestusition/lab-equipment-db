@@ -1,0 +1,92 @@
+# End-to-end test of the one-command runner on Linux, macOS and Windows.
+# Each job installs PostgreSQL 18, runs the project's own launcher exactly as a user would
+# (./run or .\run), and fails if a script fails, a test fails or the diagrams are not generated.
+# The generated diagrams page and the full run log are kept as artifacts.
+name: e2e
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  run:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # ---------------------------------------------------------------- PostgreSQL 18
+      - name: Install PostgreSQL 18 (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y -q postgresql-18 postgresql-client-18
+          ls /usr/lib/postgresql
+
+      - name: Install PostgreSQL 18 (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install postgresql@18
+          ls "$(brew --prefix postgresql@18)/bin"
+
+      - name: Install PostgreSQL 18 (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install postgresql18 -y --no-progress --params '/Password:postgres'
+          Get-ChildItem 'C:\Program Files\PostgreSQL'
+
+      # ---------------------------------------------------------------- the real thing
+      - name: Run ./run (Linux / macOS)
+        if: runner.os != 'Windows'
+        run: ./run --no-open
+
+      - name: Run .\run (Windows PowerShell launcher)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: .\run -NoOpen
+
+      - name: Run run (Windows cmd launcher, second run reuses the cluster)
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: run.cmd --skip-explain --quiet --no-open
+
+      - name: Check generated files
+        shell: bash
+        run: |
+          test -s output/diagrams.html
+          test -s docs/EER_v2.html
+          grep -q "tests passed" output/diagrams.html
+          grep -E "tests +[0-9]+ / [0-9]+ passed" output/run.log
+
+      - name: Stop the private cluster
+        if: always()
+        shell: bash
+        run: ./run --stop || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-${{ matrix.os }}
+          path: |
+            output/diagrams.html
+            output/run.log
+            output/postgres.log
+          if-no-files-found: warn
